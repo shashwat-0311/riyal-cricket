@@ -67,7 +67,7 @@ export function PoseTracker({ onPoseResult, onCalibrationComplete }: Props) {
   const result     = tracker.latestResult
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="flex flex-col gap-3">
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export function PoseTracker({ onPoseResult, onCalibrationComplete }: Props) {
       </div>
 
       {/* ── Main area ───────────────────────────────────────────────────────── */}
-      <div className="relative flex-1 min-h-0">
+      <div className="relative">
         {/*
          * WebcamFeed is ALWAYS in the DOM so videoRef.current is never null
          * when startWebcam() runs. Hidden with CSS when camera is inactive —
@@ -111,7 +111,7 @@ export function PoseTracker({ onPoseResult, onCalibrationComplete }: Props) {
          * without the status-deadlock (status needs active to render the
          * element, element needs to render to reach active).
          */}
-        <div className={webcam.status === 'active' ? 'block h-full relative' : 'hidden'}>
+        <div className={webcam.status === 'active' ? 'block relative' : 'hidden'}>
           <WebcamFeed
             videoRef={webcam.videoRef}
             landmarks={result?.landmarks ?? null}
@@ -162,7 +162,7 @@ function StartView({
   const isDenied        = webcamStatus === 'denied'
 
   return (
-    <div className="flex flex-col items-center justify-center gap-5 rounded-xl h-full min-h-[220px]
+    <div className="flex flex-col items-center justify-center gap-5 rounded-xl
       border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
       <div className="space-y-2">
         <span className="text-4xl">📷</span>

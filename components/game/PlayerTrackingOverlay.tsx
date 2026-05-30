@@ -12,6 +12,8 @@ interface Props {
   dispatch: Dispatch<{ type: 'CLEAR_CALIBRATION' }>
   trackingConfidence: number
   isCameraActive: boolean
+  onCalibrateBat: () => void
+  isBatCalibrated: boolean
 }
 
 /**
@@ -28,6 +30,8 @@ export function PlayerTrackingOverlay({
   dispatch,
   trackingConfidence,
   isCameraActive,
+  onCalibrateBat,
+  isBatCalibrated,
 }: Props) {
   const isTracking      = isCameraActive && trackingConfidence > 0.1
   const isCalibrated    = gameState.isCalibrated
@@ -85,36 +89,53 @@ export function PlayerTrackingOverlay({
       </div>
 
       {/* ── Webcam + skeleton (PoseTracker) ────────────────────────────────── */}
-      {/* Fixed height container — PoseTracker fills it */}
-      <div className="h-[172px] relative">
+      <div className="relative">
         <PoseTracker
           onPoseResult={onPoseResult}
           onCalibrationComplete={onCalibrationComplete}
         />
       </div>
 
-      {/* ── Footer: handedness + recalibrate ───────────────────────────────── */}
-      <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.06]">
-        <div className="flex items-center gap-2">
-          {isCalibrated ? (
-            <>
-              <HandednessIcon side={gameState.handedness} />
-              <span className="text-[10px] text-slate-400 capitalize">
-                {gameState.handedness}-handed
-              </span>
-            </>
-          ) : (
-            <span className="text-[10px] text-slate-600">Not calibrated</span>
+      {/* ── Footer: handedness + recalibrate + bat calibration ────────────── */}
+      <div className="border-t border-white/[0.06]">
+        {/* Row 1: pose handedness + reset */}
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-2">
+            {isCalibrated ? (
+              <>
+                <HandednessIcon side={gameState.handedness} />
+                <span className="text-[10px] text-slate-400 capitalize">
+                  {gameState.handedness}-handed
+                </span>
+              </>
+            ) : (
+              <span className="text-[10px] text-slate-600">Not calibrated</span>
+            )}
+          </div>
+          {isCalibrated && (
+            <button
+              onClick={() => dispatch({ type: 'CLEAR_CALIBRATION' })}
+              className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors underline"
+            >
+              Reset
+            </button>
           )}
         </div>
 
-        {isCalibrated && (
-          <button
-            onClick={() => dispatch({ type: 'CLEAR_CALIBRATION' })}
-            className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors underline"
-          >
-            Reset
-          </button>
+        {/* Row 2: bat calibration — only shown when camera is active */}
+        {isCameraActive && (
+          <div className="px-3 pb-2.5">
+            <button
+              onClick={onCalibrateBat}
+              className={`w-full text-[10px] py-1.5 rounded-lg border transition-colors
+                ${isBatCalibrated
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'border-white/[0.06] bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white'
+                }`}
+            >
+              {isBatCalibrated ? '🏏 Bat calibrated — recalibrate' : '🏏 Calibrate bat grip'}
+            </button>
+          </div>
         )}
       </div>
     </div>

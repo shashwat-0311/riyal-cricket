@@ -2,20 +2,26 @@
 
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Sky, PerspectiveCamera, Environment } from '@react-three/drei'
+import { OrbitControls, Sky, PerspectiveCamera } from '@react-three/drei'
 import { Pitch, PITCH_HALF_LEN } from './Pitch'
 import { Crease } from './Crease'
 import { Stumps } from './Stumps'
 import { BatterMarker } from './BatterMarker'
+import { VirtualBat } from '@/components/bat/VirtualBat'
 import type { BodyCenter, CalibrationData } from '@/types/pose'
+import type { BatTransform } from '@/types/bat'
+import { SwingState } from '@/types/bat'
+import type { RefObject } from 'react'
 
 const STUMP_Z = PITCH_HALF_LEN  // 10 units from centre
 
 interface Props {
-  batterPosition: BodyCenter | null
-  calibration?: CalibrationData | null
+  batterPosition:   BodyCenter | null
+  calibration?:     CalibrationData | null
+  batTransformRef?: RefObject<BatTransform | null>
+  swingState?:      SwingState
   /** Allow free camera rotation during development */
-  orbitEnabled?: boolean
+  orbitEnabled?:    boolean
 }
 
 /**
@@ -23,13 +29,14 @@ interface Props {
  *
  * Camera sits behind the batter (positive Z side) at a raised angle so both
  * ends of the pitch are visible. Orbit controls are enabled in development.
- *
- * Phase 3 additions will be mounted here:
- *   <VirtualBat />   — wrist-driven bat mesh
- *   <Ball />         — physics-simulated ball
- *   <Fielders />     — AI-positioned fielder meshes
  */
-export function CricketScene({ batterPosition, calibration, orbitEnabled = true }: Props) {
+export function CricketScene({
+  batterPosition,
+  calibration,
+  batTransformRef,
+  swingState = SwingState.IDLE,
+  orbitEnabled = true,
+}: Props) {
   return (
     <div className="w-full h-full rounded-xl overflow-hidden bg-slate-900">
       <Canvas
@@ -90,11 +97,19 @@ export function CricketScene({ batterPosition, calibration, orbitEnabled = true 
           <Stumps position={[0, 0, -STUMP_Z]} />
           <Crease endZ={-STUMP_Z} facing={1} />
 
-          {/* ── Batter marker — only rendered when tracking is live ─────────── */}
+          {/* ── Batter position marker ────────────────────────────────────────── */}
           {batterPosition && (
             <BatterMarker
               bodyCenter={batterPosition}
               calibration={calibration}
+            />
+          )}
+
+          {/* ── Virtual bat — mounted when sensor data is flowing ─────────────── */}
+          {batTransformRef && (
+            <VirtualBat
+              transformRef={batTransformRef}
+              swingState={swingState}
             />
           )}
         </Suspense>

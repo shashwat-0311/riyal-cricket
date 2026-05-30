@@ -1,53 +1,74 @@
 'use client'
 
-import { useState } from 'react'
-import { useRoom }      from '@/hooks/useRoom'
-import { useSocket }    from '@/hooks/useSocket'
-import { useLatency }   from '@/hooks/useLatency'
-import { useGameState } from '@/hooks/useGameState'
-import { CricketScene } from '@/components/scene/CricketScene'
+import { useState, useEffect } from 'react'
+import { useRoom }       from '@/hooks/useRoom'
+import { useSocket }     from '@/hooks/useSocket'
+import { useLatency }    from '@/hooks/useLatency'
+import { useGameState }  from '@/hooks/useGameState'
+import { useBatTracking } from '@/hooks/useBatTracking'
+import { CricketScene }  from '@/components/scene/CricketScene'
 import type { BodyCenter, CalibrationData, PoseResult } from '@/types/pose'
 
-// New premium UI shells (all hook/logic reuse — presentation only)
-import { GameHeader }             from './GameHeader'
-import { RoomInfoCard }           from './RoomInfoCard'
-import { ConnectionStatsCard }    from './ConnectionStatsCard'
-import { PlayerTrackingOverlay }  from './PlayerTrackingOverlay'
-import { PlayerStatusCard }       from './PlayerStatusCard'
-import { PhaseProgressCard }      from './PhaseProgressCard'
-import { OnboardingBar }          from './OnboardingBar'
+import { GameHeader }            from './GameHeader'
+import { RoomInfoCard }          from './RoomInfoCard'
+import { ConnectionStatsCard }   from './ConnectionStatsCard'
+import { PlayerTrackingOverlay } from './PlayerTrackingOverlay'
+import { PlayerStatusCard }      from './PlayerStatusCard'
+import { PhaseProgressCard }     from './PhaseProgressCard'
+import { OnboardingBar }         from './OnboardingBar'
+import { BatDebugOverlay }       from './BatDebugOverlay'
 
 /**
- * Root game screen — Phase 2 premium redesign.
+ * Root game screen — Phase 3: virtual bat tracking.
  *
- * Layout grid:
- *   ┌─ Header (h-14) ──────────────────────────────────────────┐
- *   ├─ Left sidebar ─┬─ 3D Scene (hero) ─┬─ Right sidebar ────┤
- *   │ RoomInfoCard   │  CricketScene     │ PlayerStatusCard    │
- *   │ ConnStats      │  + Tracking PIP   │ PhaseProgressCard   │
- *   ├─ OnboardingBar (h-16) ────────────────────────────────────┤
- *
- * ALL hooks unchanged from Phase 1/2 — only layout and presentation differ.
+ * Data flow:
+ *   Phone sensors → Socket.IO → useRoom (latestFrame)
+ *                                    ↓
+ *   Webcam → MediaPipe → PoseTracker (poseResult)
+ *                                    ↓
+ *   useBatTracking combines both → BatTransform ref → VirtualBat (useFrame)
+ *                                                   → BatDebugOverlay (10 fps poll)
  */
 export function GameScreen() {
-  // ── Existing hooks (zero changes) ───────────────────────────────────────────
-  const { socket, connectionStatus }                                = useSocket()
+  // ── Existing hooks (unchanged) ───────────────────────────────────────────────
+  const { socket, connectionStatus }                                      = useSocket()
   const { roomState, latestFrame, frameRate, isCreating, error, createRoom } = useRoom()
-  const latency                                                     = useLatency(socket, roomState?.controllerConnected ?? false)
-  const { state: gameState, dispatch }                              = useGameState()
+  const latency                                                           = useLatency(socket, roomState?.controllerConnected ?? false)
+  const { state: gameState, dispatch }                                    = useGameState()
 
-  // ── Local presentation state ─────────────────────────────────────────────────
-  const [sidebarOpen, setSidebarOpen]           = useState(true)
-  const [batterPosition, setBatterPosition]     = useState<BodyCenter | null>(null)
-  const [calibrationData, setCalibrationData]   = useState<CalibrationData | null>(null)
-  const [isCameraActive, setIsCameraActive]     = useState(false)
+  // ── Presentation state ───────────────────────────────────────────────────────
+  const [sidebarOpen,       setSidebarOpen]       = useState(true)
+  const [batterPosition,    setBatterPosition]     = useState<BodyCenter | null>(null)
+  const [calibrationData,   setCalibrationData]   = useState<CalibrationData | null>(null)
+  const [isCameraActive,    setIsCameraActive]     = useState(false)
   const [trackingConfidence, setTrackingConfidence] = useState(0)
+  const [latestPoseResult,  setLatestPoseResult]   = useState<PoseResult | null>(null)
+  const [debugVisible,      setDebugVisible]       = useState(false)
 
-  // ── Callbacks (same as before, just infer camera state from first result) ────
+  // ── Bat tracking (Phase 3) ───────────────────────────────────────────────────
+  const {
+    batTransformRef,
+    swingMetricsRef,
+    swingState,
+    isBatCalibrated,
+    startBatCalibration,
+  } = useBatTracking(latestFrame, latestPoseResult, calibrationData, gameState.handedness)
+
+  // 'D' key toggles the bat debug overlay
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'd' || e.key === 'D') setDebugVisible(v => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // ── Callbacks ────────────────────────────────────────────────────────────────
   function handlePoseResult(result: PoseResult) {
     if (!isCameraActive) setIsCameraActive(true)
     setTrackingConfidence(result.confidence)
     if (result.bodyCenter) setBatterPosition(result.bodyCenter)
+    setLatestPoseResult(result)
   }
 
   function handleCalibrationComplete(data: CalibrationData) {
@@ -55,7 +76,7 @@ export function GameScreen() {
     dispatch({ type: 'SET_CALIBRATED', calibrationData: data })
   }
 
-  // ── Onboarding step definitions (derived from existing state) ─────────────────
+  // ── Onboarding step definitions ──────────────────────────────────────────────
   const controllerConnected = roomState?.controllerConnected ?? false
   const onboardingSteps = [
     {
@@ -94,19 +115,19 @@ export function GameScreen() {
 
   const phaseProgressSteps = [
     {
-      id: 'setup',   label: 'Create Room', sublabel: 'Generate QR code',
+      id: 'setup',     label: 'Create Room',    sublabel: 'Generate QR code',
       done: !!roomState, active: !roomState,
     },
     {
-      id: 'connect', label: 'Connect Phone', sublabel: 'Scan QR on phone',
+      id: 'connect',   label: 'Connect Phone',  sublabel: 'Scan QR on phone',
       done: controllerConnected, active: !!roomState && !controllerConnected,
     },
     {
-      id: 'camera',  label: 'Start Camera', sublabel: 'Enable webcam tracking',
+      id: 'camera',    label: 'Start Camera',   sublabel: 'Enable webcam tracking',
       done: isCameraActive, active: controllerConnected && !isCameraActive,
     },
     {
-      id: 'calibrate', label: 'Calibrate', sublabel: 'Capture neutral stance',
+      id: 'calibrate', label: 'Calibrate',      sublabel: 'Capture neutral stance',
       done: gameState.isCalibrated, active: isCameraActive && !gameState.isCalibrated,
     },
   ]
@@ -124,16 +145,15 @@ export function GameScreen() {
         onToggleSidebar={() => setSidebarOpen(v => !v)}
       />
 
-      {/* ── Middle: sidebars + 3D scene ────────────────────────────────────── */}
+      {/* ── Middle: sidebars + 3D scene ─────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* ── Left sidebar ──────────────────────────────────────────────────── */}
+        {/* ── Left sidebar ────────────────────────────────────────────────────── */}
         <aside
           className={`shrink-0 border-r border-white/[0.04] bg-slate-950/80
             overflow-y-auto flex flex-col gap-0 transition-all duration-300 ease-out
             ${sidebarOpen ? 'w-[252px]' : 'w-12'}`}
         >
-          {/* Divider line */}
           <div className="border-b border-white/[0.04]">
             <RoomInfoCard
               roomState={roomState}
@@ -154,22 +174,24 @@ export function GameScreen() {
           </div>
         </aside>
 
-        {/* ── 3D Scene (hero) ───────────────────────────────────────────────── */}
+        {/* ── 3D Scene (hero) ─────────────────────────────────────────────────── */}
         <main className="flex-1 relative overflow-hidden">
-          {/* Subtle stadium vignette overlay */}
+          {/* Vignette overlay */}
           <div className="absolute inset-0 pointer-events-none z-10
             bg-[radial-gradient(ellipse_at_center,_transparent_60%,_rgba(2,6,23,0.7)_100%)]" />
 
-          {/* R3F canvas — fills the main area */}
+          {/* R3F canvas */}
           <div className="absolute inset-0">
             <CricketScene
               batterPosition={batterPosition}
               calibration={calibrationData}
+              batTransformRef={batTransformRef}
+              swingState={swingState}
               orbitEnabled
             />
           </div>
 
-          {/* ── Player Tracking PIP (floating bottom-left) ──────────────────── */}
+          {/* ── Player Tracking PIP ─────────────────────────────────────────── */}
           <PlayerTrackingOverlay
             onPoseResult={handlePoseResult}
             onCalibrationComplete={handleCalibrationComplete}
@@ -177,9 +199,23 @@ export function GameScreen() {
             dispatch={dispatch}
             trackingConfidence={trackingConfidence}
             isCameraActive={isCameraActive}
+            onCalibrateBat={startBatCalibration}
+            isBatCalibrated={isBatCalibrated}
           />
 
-          {/* ── Scene legend (bottom center, above onboarding bar) ──────────── */}
+          {/* ── Bat debug overlay (toggle with D key) ───────────────────────── */}
+          <BatDebugOverlay
+            batTransformRef={batTransformRef}
+            swingMetricsRef={swingMetricsRef}
+            swingState={swingState}
+            isBatCalibrated={isBatCalibrated}
+            sensorFps={frameRate}
+            trackingConfidence={trackingConfidence}
+            onCalibrateBat={startBatCalibration}
+            visible={debugVisible}
+          />
+
+          {/* ── Scene legend ────────────────────────────────────────────────── */}
           <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20
             flex items-center gap-3 pointer-events-none">
             <LegendItem color="bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" label="Batter" />
@@ -193,7 +229,7 @@ export function GameScreen() {
           </div>
         </main>
 
-        {/* ── Right sidebar ─────────────────────────────────────────────────── */}
+        {/* ── Right sidebar ───────────────────────────────────────────────────── */}
         <aside className="w-[220px] shrink-0 border-l border-white/[0.04]
           bg-slate-950/80 overflow-y-auto flex flex-col gap-0">
           <div className="border-b border-white/[0.04]">
@@ -207,7 +243,7 @@ export function GameScreen() {
         </aside>
       </div>
 
-      {/* ── Bottom onboarding bar ──────────────────────────────────────────── */}
+      {/* ── Bottom onboarding bar ────────────────────────────────────────────── */}
       <OnboardingBar steps={onboardingSteps} />
     </div>
   )
