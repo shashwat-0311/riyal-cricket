@@ -1,6 +1,6 @@
-import type { Handedness, CalibrationData } from './pose'
+import type { Handedness, ControllerMode, CalibrationData } from './pose'
 
-export type { Handedness }
+export type { Handedness, ControllerMode }
 
 /**
  * Phase-1  → idle / waiting / ready
@@ -30,6 +30,7 @@ export interface GameState {
   roomId: string | null
   roomCode: string | null
   handedness: Handedness
+  controllerMode: ControllerMode
   isCalibrated: boolean
   calibrationData: CalibrationData | null
   batting: BattingStats
@@ -40,6 +41,7 @@ export const INITIAL_GAME_STATE: GameState = {
   roomId: null,
   roomCode: null,
   handedness: 'right',
+  controllerMode: 'hand',
   isCalibrated: false,
   calibrationData: null,
   batting: {

@@ -41,6 +41,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         isCalibrated: true,
         calibrationData: action.calibrationData,
         handedness: action.calibrationData.handedness,
+        controllerMode: action.calibrationData.controllerMode,
         phase: 'tracking',
       }
 

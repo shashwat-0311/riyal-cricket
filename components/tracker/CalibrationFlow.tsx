@@ -2,6 +2,7 @@
 
 import type { UseCalibrationReturn } from '@/hooks/useCalibration'
 import { HandednessSelector } from './HandednessSelector'
+import { ControllerModeSelector } from './ControllerModeSelector'
 
 interface Props {
   calibration: UseCalibrationReturn
@@ -15,11 +16,13 @@ export function CalibrationFlow({ calibration, compact = false }: Props) {
   const {
     phase,
     handedness,
+    controllerMode,
     countdown,
     calibrationData,
     capturedFrames,
     startCalibration,
     selectHandedness,
+    selectControllerMode,
     beginCountdown,
     resetCalibration,
   } = calibration
@@ -74,20 +77,36 @@ export function CalibrationFlow({ calibration, compact = false }: Props) {
   // ── All other phases — full-screen modal panel ─────────────────────────────
   return (
     <div className="absolute inset-0 z-10 bg-slate-950/95 backdrop-blur-sm flex flex-col
-      items-center justify-center p-6 gap-6">
+      items-center justify-start overflow-y-auto py-3 px-3 gap-3">
 
       {/* ── Handedness ─────────────────────────────────────────────────────── */}
       {phase === 'handedness' && (
-        <div className="w-full max-w-sm space-y-5 animate-fade-in">
-          <div className="text-center space-y-1">
-            <h3 className="text-xl font-bold text-white">Batting Stance</h3>
-            <p className="text-sm text-slate-400">Step 1 of 3</p>
-          </div>
+        <div className="w-full space-y-2 animate-fade-in">
+          <p className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+            Step 1 of 4 · Batting Stance
+          </p>
           <HandednessSelector selected={handedness} onSelect={selectHandedness} />
           <button
             onClick={() => selectHandedness(handedness)}
-            className="w-full py-3 rounded-xl bg-pitch-600 hover:bg-pitch-500 text-white
-              font-bold text-sm transition-colors"
+            className="w-full py-2 rounded-xl bg-pitch-600 hover:bg-pitch-500 text-white
+              font-bold text-xs transition-colors"
+          >
+            Continue →
+          </button>
+        </div>
+      )}
+
+      {/* ── Controller mode ────────────────────────────────────────────────── */}
+      {phase === 'controller-mode' && (
+        <div className="w-full space-y-2 animate-fade-in">
+          <p className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+            Step 2 of 4 · Controller
+          </p>
+          <ControllerModeSelector selected={controllerMode} onSelect={selectControllerMode} />
+          <button
+            onClick={() => selectControllerMode(controllerMode)}
+            className="w-full py-2 rounded-xl bg-pitch-600 hover:bg-pitch-500 text-white
+              font-bold text-xs transition-colors"
           >
             Continue →
           </button>
@@ -96,28 +115,30 @@ export function CalibrationFlow({ calibration, compact = false }: Props) {
 
       {/* ── Stance prompt ──────────────────────────────────────────────────── */}
       {phase === 'stance-prompt' && (
-        <div className="w-full max-w-sm space-y-6 animate-fade-in text-center">
-          <div className="space-y-1">
-            <h3 className="text-xl font-bold text-white">Take Your Stance</h3>
-            <p className="text-sm text-slate-400">Step 2 of 3</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900 p-5 text-left space-y-3">
+        <div className="w-full space-y-2 animate-fade-in">
+          <p className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+            Step 3 of 4 · Take Your Stance
+          </p>
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-left space-y-2">
             <Instruction num={1} text="Stand fully in frame (head to toe)" />
-            <Instruction num={2} text="Hold your normal batting guard position" />
+            {controllerMode === 'stick'
+              ? <Instruction num={2} text="Hold the stick like a bat in batting guard" />
+              : <Instruction num={2} text="Hold your normal batting guard position" />
+            }
             <Instruction num={3} text="Stay still for 1 second while capturing" />
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <button
               onClick={resetCalibration}
-              className="flex-1 py-3 rounded-xl border border-slate-700 text-slate-400
-                hover:border-slate-600 hover:text-slate-300 text-sm font-semibold transition-colors"
+              className="flex-1 py-2 rounded-xl border border-slate-700 text-slate-400
+                hover:border-slate-600 hover:text-slate-300 text-xs font-semibold transition-colors"
             >
               ← Back
             </button>
             <button
               onClick={beginCountdown}
-              className="flex-1 py-3 rounded-xl bg-pitch-600 hover:bg-pitch-500 text-white
-                font-bold text-sm transition-colors"
+              className="flex-1 py-2 rounded-xl bg-pitch-600 hover:bg-pitch-500 text-white
+                font-bold text-xs transition-colors"
             >
               Ready →
             </button>
@@ -127,14 +148,14 @@ export function CalibrationFlow({ calibration, compact = false }: Props) {
 
       {/* ── Countdown ──────────────────────────────────────────────────────── */}
       {phase === 'countdown' && (
-        <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <p className="text-slate-400 text-sm uppercase tracking-widest">
+        <div className="flex flex-col items-center gap-3 animate-fade-in w-full">
+          <p className="text-slate-400 text-[10px] uppercase tracking-widest">
             Hold your stance…
           </p>
           <div
             key={countdown}
-            className="w-28 h-28 rounded-full border-4 border-pitch-500 flex items-center
-              justify-center text-6xl font-black text-white animate-pulse-fast"
+            className="w-16 h-16 rounded-full border-4 border-pitch-500 flex items-center
+              justify-center text-4xl font-black text-white animate-pulse-fast"
           >
             {countdown}
           </div>
@@ -143,15 +164,15 @@ export function CalibrationFlow({ calibration, compact = false }: Props) {
 
       {/* ── Capturing ──────────────────────────────────────────────────────── */}
       {phase === 'capturing' && (
-        <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <p className="text-white font-semibold">Capturing…</p>
-          <div className="w-64 bg-slate-800 rounded-full h-2 overflow-hidden">
+        <div className="flex flex-col items-center gap-3 animate-fade-in w-full">
+          <p className="text-white text-xs font-semibold">Capturing…</p>
+          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div
               className="h-full bg-pitch-500 rounded-full transition-all duration-100"
               style={{ width: `${(capturedFrames / CAPTURE_FRAMES) * 100}%` }}
             />
           </div>
-          <p className="text-xs text-slate-500 font-mono">
+          <p className="text-[10px] text-slate-500 font-mono">
             {capturedFrames} / {CAPTURE_FRAMES} frames
           </p>
         </div>
@@ -162,12 +183,12 @@ export function CalibrationFlow({ calibration, compact = false }: Props) {
 
 function Instruction({ num, text }: { num: number; text: string }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="w-5 h-5 rounded-full bg-pitch-800 text-pitch-400 text-xs font-bold
+    <div className="flex items-start gap-2">
+      <span className="w-4 h-4 rounded-full bg-pitch-800 text-pitch-400 text-[10px] font-bold
         flex items-center justify-center shrink-0 mt-0.5">
         {num}
       </span>
-      <span className="text-sm text-slate-300">{text}</span>
+      <span className="text-[11px] text-slate-300 leading-tight">{text}</span>
     </div>
   )
 }

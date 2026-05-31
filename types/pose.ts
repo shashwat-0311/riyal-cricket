@@ -95,6 +95,11 @@ export interface BodyCenter {
 
 export type Handedness = 'left' | 'right'
 
+// ─── Controller mode ─────────────────────────────────────────────────────────
+
+/** How the phone is being used as a bat controller */
+export type ControllerMode = 'hand' | 'stick'
+
 // ─── Calibration ─────────────────────────────────────────────────────────────
 
 /**
@@ -108,6 +113,7 @@ export interface CalibrationFrame {
 
 export interface CalibrationData {
   handedness: Handedness
+  controllerMode: ControllerMode
   /** Mean neutral-stance landmarks averaged over ~30 capture frames */
   neutralLandmarks: BodyLandmarks
   /** Mean neutral body centre */
@@ -138,8 +144,9 @@ export interface PoseResult {
 
 export type CalibrationPhase =
   | 'idle'
-  | 'handedness'     // Waiting for left/right selection
-  | 'stance-prompt'  // Instruction screen: "take your batting stance"
-  | 'countdown'      // 3-2-1 countdown
-  | 'capturing'      // Collecting frames
-  | 'complete'       // Done — calibrationData is ready
+  | 'handedness'       // Waiting for left/right selection
+  | 'controller-mode'  // Waiting for hand/stick selection
+  | 'stance-prompt'    // Instruction screen: "take your batting stance"
+  | 'countdown'        // 3-2-1 countdown
+  | 'capturing'        // Collecting frames
+  | 'complete'         // Done — calibrationData is ready

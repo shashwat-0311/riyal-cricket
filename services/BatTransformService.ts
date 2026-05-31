@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { BodyLandmarks, BodyCenter, CalibrationData, Handedness } from '@/types/pose'
+import type { BodyLandmarks, BodyCenter, CalibrationData, Handedness, ControllerMode } from '@/types/pose'
 import type { DeviceOrientationData } from '@/types/sensor'
 import type { BatTransform, BatCalibrationData } from '@/types/bat'
 import { BatOrientationMapper } from './BatOrientationMapper'
@@ -46,6 +46,10 @@ export class BatTransformService {
   private prevTs       = 0
 
   // ── Public API ──────────────────────────────────────────────────────────────
+
+  setControllerMode(mode: ControllerMode): void {
+    this.orientationMapper.setControllerMode(mode)
+  }
 
   setCalibration(cal: BatCalibrationData): void {
     this.orientationMapper.setCalibration(cal)

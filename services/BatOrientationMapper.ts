@@ -1,9 +1,18 @@
 import * as THREE from 'three'
 import type { DeviceOrientationData } from '@/types/sensor'
 import type { BatCalibrationData } from '@/types/bat'
+import type { ControllerMode } from '@/types/pose'
 
 // Slerp weight per sensor frame (~30 fps) — settling time ≈ 160 ms
 const SLERP_FACTOR = 0.18
+
+// 90° rotation around Z axis [x,y,z,w].
+// When the phone is portrait-vertical on a selfie stick, a forward bat swing
+// rotates the device around its X axis (beta/pitch).  Hand-held, the same
+// physical swing rotates around Y (gamma/roll).
+// Applying Q_z90 * relative * Q_z90.conj remaps X-axis rotation → Y-axis,
+// making stick mode produce the same relative quaternion as hand-held mode.
+const STICK_CORRECTION = new THREE.Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2)
 
 /**
  * Converts DeviceOrientation angles → smoothed quaternion for bat rotation.
@@ -16,8 +25,13 @@ const SLERP_FACTOR = 0.18
  * grip orientation, so absolute compass direction is irrelevant.
  */
 export class BatOrientationMapper {
-  private smoothed  = new THREE.Quaternion()   // running slerp output
+  private smoothed   = new THREE.Quaternion()   // running slerp output
   private neutralQ: THREE.Quaternion | null = null
+  private stickMode  = false
+
+  setControllerMode(mode: ControllerMode): void {
+    this.stickMode = mode === 'stick'
+  }
 
   setCalibration(cal: BatCalibrationData): void {
     this.neutralQ = new THREE.Quaternion(
@@ -63,9 +77,18 @@ export class BatOrientationMapper {
     )
 
     // If calibrated: express current rotation relative to the neutral grip
-    const target = this.neutralQ
+    let target = this.neutralQ
       ? this.neutralQ.clone().invert().multiply(current)
       : current
+
+    // Stick-mode axis correction: remap relative rotation axes so the same
+    // physical swing produces the same output quaternion as hand-held mode.
+    // Q_z90 * target * Q_z90.conj rotates the rotation axis by 90° around Z,
+    // mapping X-axis (beta) rotations to Y-axis (gamma) rotations.
+    if (this.stickMode) {
+      const c = STICK_CORRECTION.clone()
+      target = c.multiply(target).multiply(STICK_CORRECTION.clone().conjugate())
+    }
 
     // Ensure we always interpolate along the shortest arc
     if (this.smoothed.dot(target) < 0) target.set(-target.x, -target.y, -target.z, -target.w)

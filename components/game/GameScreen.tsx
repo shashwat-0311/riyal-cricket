@@ -52,7 +52,7 @@ export function GameScreen() {
     swingState,
     isBatCalibrated,
     startBatCalibration,
-  } = useBatTracking(latestFrame, latestPoseResult, calibrationData, gameState.handedness)
+  } = useBatTracking(latestFrame, latestPoseResult, calibrationData, gameState.handedness, gameState.controllerMode)
 
   // 'D' key toggles the bat debug overlay
   useEffect(() => {

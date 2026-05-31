@@ -7,7 +7,7 @@ import { SwingDetectionService } from '@/services/SwingDetectionService'
 import { SwingState, DEFAULT_SWING_METRICS } from '@/types/bat'
 import type { BatTransform, BatCalibrationData, SwingMetrics } from '@/types/bat'
 import type { SensorFrame } from '@/types/sensor'
-import type { PoseResult, CalibrationData, Handedness } from '@/types/pose'
+import type { PoseResult, CalibrationData, Handedness, ControllerMode } from '@/types/pose'
 
 export interface UseBatTrackingReturn {
   /** Mutable ref — read by VirtualBat inside useFrame (zero React re-renders) */
@@ -31,10 +31,11 @@ export interface UseBatTrackingReturn {
  *   - BatDebugOverlay polls swingMetricsRef at its own rate (see BatDebugOverlay).
  */
 export function useBatTracking(
-  latestFrame:  SensorFrame | null,
-  poseResult:   PoseResult | null,
-  calibration:  CalibrationData | null,
-  handedness:   Handedness,
+  latestFrame:    SensorFrame | null,
+  poseResult:     PoseResult | null,
+  calibration:    CalibrationData | null,
+  handedness:     Handedness,
+  controllerMode: ControllerMode,
 ): UseBatTrackingReturn {
   // ── Stable service instances ─────────────────────────────────────────────────
   const transformSvc = useRef(new BatTransformService())
@@ -57,6 +58,11 @@ export function useBatTracking(
   const prevSwingStateRef    = useRef<SwingState>(SwingState.IDLE)
   const batCalibrationRef    = useRef<BatCalibrationData | null>(null)
   const lastProcessedSeqRef  = useRef<number>(-1)
+
+  // Sync controller mode → service whenever it changes
+  useEffect(() => {
+    transformSvc.current.setControllerMode(controllerMode)
+  }, [controllerMode])
 
   // Sync calibration state → service whenever it changes
   useEffect(() => {

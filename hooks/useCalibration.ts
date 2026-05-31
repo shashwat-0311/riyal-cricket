@@ -7,6 +7,7 @@ import type {
   CalibrationPhase,
   BodyLandmarks,
   Handedness,
+  ControllerMode,
   PoseResult,
 } from '@/types/pose'
 
@@ -16,11 +17,13 @@ const COUNTDOWN_SEC  = 3
 export interface UseCalibrationReturn {
   phase: CalibrationPhase
   handedness: Handedness
+  controllerMode: ControllerMode
   countdown: number
   calibrationData: CalibrationData | null
   capturedFrames: number
   startCalibration: () => void
   selectHandedness: (h: Handedness) => void
+  selectControllerMode: (m: ControllerMode) => void
   beginCountdown: () => void
   feedFrame: (result: PoseResult) => void
   resetCalibration: () => void
@@ -30,7 +33,7 @@ export interface UseCalibrationReturn {
  * State machine for the calibration flow.
  *
  * Transitions:
- *   idle → handedness → stance-prompt → countdown → capturing → complete
+ *   idle → handedness → controller-mode → stance-prompt → countdown → capturing → complete
  *
  * `feedFrame` is called on every pose result during the `capturing` phase.
  * After CAPTURE_FRAMES frames it averages them and emits CalibrationData.
@@ -38,16 +41,19 @@ export interface UseCalibrationReturn {
 export function useCalibration(): UseCalibrationReturn {
   const [phase, setPhase]                     = useState<CalibrationPhase>('idle')
   const [handedness, setHandedness]           = useState<Handedness>('right')
+  const [controllerMode, setControllerMode]   = useState<ControllerMode>('hand')
   const [countdown, setCountdown]             = useState(COUNTDOWN_SEC)
   const [calibrationData, setCalibrationData] = useState<CalibrationData | null>(null)
   const [capturedFrames, setCapturedFrames]   = useState(0)
 
-  const bufferRef          = useRef<BodyLandmarks[]>([])
-  const countdownTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null)
-  const handednessRef      = useRef<Handedness>('right')
+  const bufferRef           = useRef<BodyLandmarks[]>([])
+  const countdownTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const handednessRef       = useRef<Handedness>('right')
+  const controllerModeRef   = useRef<ControllerMode>('hand')
 
-  // Keep ref in sync so the interval closure reads the latest value
+  // Keep refs in sync so interval closures read the latest values
   useEffect(() => { handednessRef.current = handedness }, [handedness])
+  useEffect(() => { controllerModeRef.current = controllerMode }, [controllerMode])
 
   const clearTimer = () => {
     if (countdownTimerRef.current) {
@@ -62,6 +68,11 @@ export function useCalibration(): UseCalibrationReturn {
 
   const selectHandedness = useCallback((h: Handedness) => {
     setHandedness(h)
+    setPhase('controller-mode')
+  }, [])
+
+  const selectControllerMode = useCallback((m: ControllerMode) => {
+    setControllerMode(m)
     setPhase('stance-prompt')
   }, [])
 
@@ -99,7 +110,8 @@ export function useCalibration(): UseCalibrationReturn {
       const shoulderWidthNorm = PoseTrackingService.shoulderWidth(neutralLandmarks)
 
       setCalibrationData({
-        handedness: handednessRef.current,
+        handedness:     handednessRef.current,
+        controllerMode: controllerModeRef.current,
         neutralLandmarks,
         neutralBodyCenter,
         shoulderWidthNorm,
@@ -124,11 +136,13 @@ export function useCalibration(): UseCalibrationReturn {
   return {
     phase,
     handedness,
+    controllerMode,
     countdown,
     calibrationData,
     capturedFrames,
     startCalibration,
     selectHandedness,
+    selectControllerMode,
     beginCountdown,
     feedFrame,
     resetCalibration,

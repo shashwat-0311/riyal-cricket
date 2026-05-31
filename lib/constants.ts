@@ -1,7 +1,7 @@
 /** Sensor frames emitted per second from the controller */
-export const SENSOR_FPS = 30
+export const SENSOR_FPS = 60
 
-/** Milliseconds between sensor frames (≈ 33.3 ms) */
+/** Milliseconds between sensor frames (≈ 16.7 ms) */
 export const SENSOR_INTERVAL_MS = Math.round(1_000 / SENSOR_FPS)
 
 /** How often to fire a latency ping from the game screen (ms) */

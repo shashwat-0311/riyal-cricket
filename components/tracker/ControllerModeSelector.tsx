@@ -1,21 +1,21 @@
 'use client'
 
-import type { Handedness } from '@/types/pose'
+import type { ControllerMode } from '@/types/pose'
 
 interface Props {
-  selected: Handedness
-  onSelect: (h: Handedness) => void
+  selected: ControllerMode
+  onSelect: (m: ControllerMode) => void
 }
 
-const OPTIONS: { value: Handedness; label: string; icon: string }[] = [
-  { value: 'right', label: 'Right-handed', icon: '🏏' },
-  { value: 'left',  label: 'Left-handed',  icon: '🪃' },
+const OPTIONS: { value: ControllerMode; label: string; icon: string }[] = [
+  { value: 'hand',  label: 'Phone in Hand', icon: '📱' },
+  { value: 'stick', label: 'Selfie Stick',  icon: '🥢' },
 ]
 
-export function HandednessSelector({ selected, onSelect }: Props) {
+export function ControllerModeSelector({ selected, onSelect }: Props) {
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-slate-400 text-center">Which hand holds the bat?</p>
+      <p className="text-[11px] text-slate-400 text-center">How are you holding the phone?</p>
       <div className="grid grid-cols-2 gap-2">
         {OPTIONS.map(opt => {
           const isActive = selected === opt.value

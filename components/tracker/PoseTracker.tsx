@@ -120,9 +120,6 @@ export function PoseTracker({ onPoseResult, onCalibrationComplete }: Props) {
             videoHeight={webcam.videoDimensions?.height ?? 720}
             confidence={result?.confidence ?? 0}
           />
-          {calibration.phase !== 'idle' && calibration.phase !== 'complete' && (
-            <CalibrationFlow calibration={calibration} />
-          )}
         </div>
 
         {webcam.status !== 'active' && (
