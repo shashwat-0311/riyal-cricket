@@ -17,10 +17,12 @@ let instance: AppSocket | null = null
  * autoConnect: false means the socket only dials when .connect() is called,
  * which hooks do explicitly to avoid spurious connections during SSR hydration.
  */
-export function getSocket(): AppSocket {
-  if (typeof window === 'undefined') {
-    throw new Error('[socket] getSocket() called on the server. Import only in client components.')
-  }
+/**
+ * Returns null during SSR (window is undefined); returns the singleton socket
+ * on the client.  Callers must guard against null before using the socket.
+ */
+export function getSocket(): AppSocket | null {
+  if (typeof window === 'undefined') return null
   if (!instance) {
     instance = io({
       autoConnect: false,

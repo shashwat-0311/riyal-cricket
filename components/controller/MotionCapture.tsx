@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useMotionSensor } from '@/hooks/useMotionSensor'
 import { useSocket } from '@/hooks/useSocket'
 
 import type { SensorFrame } from '@/types/sensor'
+import type { DeliveryControlState, DeliveryStatePayload } from '@/types/ball'
 
 interface Props {
   roomCode: string
@@ -13,8 +14,10 @@ interface Props {
 export function MotionCapture({ roomCode }: Props) {
   const { socket, isConnected } = useSocket()
   const sensor = useMotionSensor()
+  const [deliveryState, setDeliveryState] = useState<DeliveryControlState>('WAITING')
+  const [countdown,     setCountdown]     = useState(0)
 
-  // Once permission is granted, start capture and send frames
+  // Start sensor capture
   useEffect(() => {
     if (sensor.permission === 'granted' && !sensor.isCapturing && isConnected) {
       sensor.startCapture(roomCode, (frame: SensorFrame) => {
@@ -22,6 +25,21 @@ export function MotionCapture({ roomCode }: Props) {
       })
     }
   }, [sensor, sensor.permission, sensor.isCapturing, isConnected, socket, roomCode])
+
+  // Listen for delivery state changes from the game screen
+  useEffect(() => {
+    function onDeliveryState({ state, countdown: cd }: DeliveryStatePayload) {
+      setDeliveryState(state)
+      setCountdown(cd ?? 0)
+    }
+    socket.on('delivery:state', onDeliveryState)
+    return () => { socket.off('delivery:state', onDeliveryState) }
+  }, [socket])
+
+  const requestDelivery = useCallback(() => {
+    if (deliveryState !== 'WAITING') return
+    socket.emit('delivery:request')
+  }, [socket, deliveryState])
 
   return (
     <div className="flex flex-col h-full">
@@ -37,8 +55,14 @@ export function MotionCapture({ roomCode }: Props) {
       {sensor.permission === 'unavailable' && <UnavailableState />}
       {sensor.permission === 'insecure' && <InsecureState />}
 
-      {(sensor.permission === 'granted') && (
-        <ActiveCapture sensor={sensor} isConnected={isConnected} />
+      {sensor.permission === 'granted' && (
+        <ActiveCapture
+          sensor={sensor}
+          isConnected={isConnected}
+          deliveryState={deliveryState}
+          countdown={countdown}
+          onRequestDelivery={requestDelivery}
+        />
       )}
     </div>
   )
@@ -148,15 +172,26 @@ function InsecureState() {
 function ActiveCapture({
   sensor,
   isConnected,
+  deliveryState,
+  countdown,
+  onRequestDelivery,
 }: {
   sensor: ReturnType<typeof useMotionSensor>
   isConnected: boolean
+  deliveryState: DeliveryControlState
+  countdown: number
+  onRequestDelivery: () => void
 }) {
   const { orientation, motion, isCapturing } = sensor
 
   function fmt(v: number | null, d = 1) {
     return v === null ? '—' : v.toFixed(d)
   }
+
+  const isWaiting  = deliveryState === 'WAITING'
+  const isCountdown = deliveryState === 'COUNTDOWN'
+  const isActive   = deliveryState === 'ACTIVE_DELIVERY'
+  const isComplete = deliveryState === 'DELIVERY_COMPLETE'
 
   return (
     <div className="flex flex-col h-full">
@@ -177,33 +212,78 @@ function ActiveCapture({
       </div>
 
       {/* Sensor values */}
-      <div className="flex-1 p-5 space-y-6 overflow-auto">
-        {/* Orientation visualizer */}
-        <OrientationVisualizer
-          beta={orientation.beta}
-          gamma={orientation.gamma}
-        />
+      <div className="flex-1 p-5 space-y-6 overflow-auto pb-36">
+        <OrientationVisualizer beta={orientation.beta} gamma={orientation.gamma} />
 
-        {/* Orientation */}
         <Section title="Orientation">
           <Row label="Alpha (Z)" value={fmt(orientation.alpha)} unit="°" />
-          <Row label="Beta (X)" value={fmt(orientation.beta)} unit="°" />
+          <Row label="Beta (X)"  value={fmt(orientation.beta)}  unit="°" />
           <Row label="Gamma (Y)" value={fmt(orientation.gamma)} unit="°" />
         </Section>
 
-        {/* Acceleration */}
         <Section title="Acceleration">
           <Row label="X" value={fmt(motion.acceleration.x)} unit="m/s²" />
           <Row label="Y" value={fmt(motion.acceleration.y)} unit="m/s²" />
           <Row label="Z" value={fmt(motion.acceleration.z)} unit="m/s²" />
         </Section>
 
-        {/* Rotation rate */}
         <Section title="Rotation Rate">
           <Row label="Alpha" value={fmt(motion.rotationRate.x)} unit="°/s" />
-          <Row label="Beta" value={fmt(motion.rotationRate.y)} unit="°/s" />
+          <Row label="Beta"  value={fmt(motion.rotationRate.y)} unit="°/s" />
           <Row label="Gamma" value={fmt(motion.rotationRate.z)} unit="°/s" />
         </Section>
+      </div>
+
+      {/* ── Delivery action area — fixed at bottom ───────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/95 backdrop-blur-sm
+        border-t border-white/[0.06] space-y-2">
+
+        {/* Countdown display */}
+        {isCountdown && (
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-slate-400 text-sm">Get ready…</span>
+            <span
+              key={countdown}
+              className="text-4xl font-black text-red-400 animate-pulse"
+            >
+              {countdown}
+            </span>
+          </div>
+        )}
+
+        {/* Active delivery indicator */}
+        {isActive && (
+          <div className="flex items-center justify-center gap-2 py-1">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-red-400 font-semibold text-sm">Ball in Play — Swing!</span>
+          </div>
+        )}
+
+        {/* Complete indicator */}
+        {isComplete && (
+          <div className="flex items-center justify-center gap-2 py-1">
+            <span className="text-pitch-400 font-semibold text-sm">
+              Delivery complete…
+            </span>
+          </div>
+        )}
+
+        {/* Main action button */}
+        <button
+          onClick={onRequestDelivery}
+          disabled={!isWaiting || !isConnected}
+          className={`w-full py-5 rounded-2xl font-black text-xl tracking-wide
+            transition-all duration-200 active:scale-95
+            ${isWaiting && isConnected
+              ? 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-lg shadow-emerald-900/50'
+              : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+            }`}
+        >
+          {isWaiting    ? 'Ready for Next Ball'  : ''}
+          {isCountdown  ? `Incoming… ${countdown}` : ''}
+          {isActive     ? 'Ball in Play'          : ''}
+          {isComplete   ? 'Resetting…'            : ''}
+        </button>
       </div>
     </div>
   )

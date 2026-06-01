@@ -29,6 +29,11 @@ const BLADE_W   = 0.100   // blade width
 const BLADE_D   = 0.040   // blade depth (thickness)
 const BLADE_H   = 0.572   // blade length
 
+// Visual scale multiplier — makes the bat screen-readable without changing
+// the physics transform (position/quaternion from BatTransformService).
+// CollisionService uses BAT_VISUAL_SCALE * blade bounds to match this.
+export const BAT_VISUAL_SCALE = 1.5
+
 // Derived Y offsets (origin = grip base)
 const GRIP_Y     = GRIP_H / 2
 const HANDLE_Y   = HANDLE_H / 2
@@ -66,44 +71,49 @@ export const VirtualBat = memo(function VirtualBat({ transformRef, swingState }:
 
   return (
     <group ref={groupRef}>
-      {/* ── Grip tape ─────────────────────────────────────────────────────── */}
-      <mesh position={[0, GRIP_Y, 0]} castShadow>
-        <cylinderGeometry args={[GRIP_R, GRIP_R, GRIP_H, 12]} />
-        <meshStandardMaterial color="#1a1008" roughness={0.92} />
-      </mesh>
+      {/* BAT_VISUAL_SCALE enlarges the visual bat without touching the physics
+          transform (position/quaternion stay in world space).
+          CollisionService blade bounds are pre-multiplied by BAT_VISUAL_SCALE. */}
+      <group scale={BAT_VISUAL_SCALE}>
+        {/* ── Grip tape ─────────────────────────────────────────────────────── */}
+        <mesh position={[0, GRIP_Y, 0]} castShadow>
+          <cylinderGeometry args={[GRIP_R, GRIP_R, GRIP_H, 12]} />
+          <meshStandardMaterial color="#1a1008" roughness={0.92} />
+        </mesh>
 
-      {/* ── Handle ────────────────────────────────────────────────────────── */}
-      <mesh position={[0, HANDLE_Y, 0]} castShadow>
-        <cylinderGeometry args={[HANDLE_RT, HANDLE_RB, HANDLE_H, 12]} />
-        <meshStandardMaterial color="#7a4f2a" roughness={0.78} />
-      </mesh>
+        {/* ── Handle ────────────────────────────────────────────────────────── */}
+        <mesh position={[0, HANDLE_Y, 0]} castShadow>
+          <cylinderGeometry args={[HANDLE_RT, HANDLE_RB, HANDLE_H, 12]} />
+          <meshStandardMaterial color="#7a4f2a" roughness={0.78} />
+        </mesh>
 
-      {/* ── Shoulder (handle→blade taper) ─────────────────────────────────── */}
-      <mesh position={[0, SHOULDER_Y, 0]} castShadow>
-        <cylinderGeometry args={[BLADE_D / 2, SHOULDER_R, SHOULDER_H, 12]} />
-        <meshStandardMaterial color="#c8a05a" roughness={0.62} />
-      </mesh>
+        {/* ── Shoulder (handle→blade taper) ─────────────────────────────────── */}
+        <mesh position={[0, SHOULDER_Y, 0]} castShadow>
+          <cylinderGeometry args={[BLADE_D / 2, SHOULDER_R, SHOULDER_H, 12]} />
+          <meshStandardMaterial color="#c8a05a" roughness={0.62} />
+        </mesh>
 
-      {/* ── Blade ─────────────────────────────────────────────────────────── */}
-      <mesh position={[0, BLADE_Y, 0]} castShadow receiveShadow>
-        <boxGeometry args={[BLADE_W, BLADE_H, BLADE_D]} />
-        <meshStandardMaterial
-          color={isSwing ? '#e8c878' : '#c8a05a'}
-          roughness={0.52}
-          metalness={0.04}
-        />
-      </mesh>
+        {/* ── Blade ─────────────────────────────────────────────────────────── */}
+        <mesh position={[0, BLADE_Y, 0]} castShadow receiveShadow>
+          <boxGeometry args={[BLADE_W, BLADE_H, BLADE_D]} />
+          <meshStandardMaterial
+            color={isSwing ? '#e8c878' : '#c8a05a'}
+            roughness={0.52}
+            metalness={0.04}
+          />
+        </mesh>
 
-      {/* ── Swing glow ────────────────────────────────────────────────────── */}
-      {isSwing && (
-        <pointLight
-          position={[0, BLADE_Y, 0]}
-          color="#fcd34d"
-          intensity={2.2}
-          distance={1.6}
-          decay={2}
-        />
-      )}
+        {/* ── Swing glow ────────────────────────────────────────────────────── */}
+        {isSwing && (
+          <pointLight
+            position={[0, BLADE_Y, 0]}
+            color="#fcd34d"
+            intensity={2.2}
+            distance={2.4}
+            decay={2}
+          />
+        )}
+      </group>
     </group>
   )
 })

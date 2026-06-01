@@ -98,6 +98,20 @@ export function setupSocketHandlers(io: AppServer): void {
       io.to(gameSocketId).emit('sensor:data', frame)
     })
 
+    // ── delivery:request ──────────────────────────────────────────────────────
+    // Controller → game: player pressed "Ready for Next Ball".
+    socket.on('delivery:request', () => {
+      if (socket.data.role !== 'controller' || !socket.data.roomId) return
+      socket.to(socket.data.roomId).emit('delivery:request')
+    })
+
+    // ── delivery:state ────────────────────────────────────────────────────────
+    // Game → controller: delivery lifecycle state change.
+    socket.on('delivery:state', (payload) => {
+      if (socket.data.role !== 'game' || !socket.data.roomId) return
+      socket.to(socket.data.roomId).emit('delivery:state', payload)
+    })
+
     // ── ping (RTT latency measurement) ────────────────────────────────────────
     socket.on('ping', (clientTs, callback) => {
       callback(Date.now())

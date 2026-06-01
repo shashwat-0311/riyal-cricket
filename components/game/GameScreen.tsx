@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRoom }       from '@/hooks/useRoom'
 import { useSocket }     from '@/hooks/useSocket'
 import { useLatency }    from '@/hooks/useLatency'
@@ -8,26 +8,27 @@ import { useGameState }  from '@/hooks/useGameState'
 import { useBatTracking } from '@/hooks/useBatTracking'
 import { CricketScene }  from '@/components/scene/CricketScene'
 import type { BodyCenter, CalibrationData, PoseResult } from '@/types/pose'
+import type { CameraSnapshot } from '@/components/scene/CameraDebugInfo'
 
+import { useDelivery }           from '@/hooks/useDelivery'
 import { GameHeader }            from './GameHeader'
 import { RoomInfoCard }          from './RoomInfoCard'
 import { ConnectionStatsCard }   from './ConnectionStatsCard'
 import { PlayerTrackingOverlay } from './PlayerTrackingOverlay'
 import { PlayerStatusCard }      from './PlayerStatusCard'
 import { PhaseProgressCard }     from './PhaseProgressCard'
-import { OnboardingBar }         from './OnboardingBar'
 import { BatDebugOverlay }       from './BatDebugOverlay'
+import { BallDebugOverlay }      from './BallDebugOverlay'
+import { CameraDebugOverlay }    from './CameraDebugOverlay'
 
 /**
- * Root game screen — Phase 3: virtual bat tracking.
+ * Root game screen — Phase 3 + 4: virtual bat tracking + ball delivery.
  *
  * Data flow:
- *   Phone sensors → Socket.IO → useRoom (latestFrame)
- *                                    ↓
- *   Webcam → MediaPipe → PoseTracker (poseResult)
- *                                    ↓
- *   useBatTracking combines both → BatTransform ref → VirtualBat (useFrame)
- *                                                   → BatDebugOverlay (10 fps poll)
+ *   Phone → Socket.IO → useRoom (latestFrame)
+ *   Webcam → MediaPipe → useBatTracking → batTransformRef → VirtualBat
+ *   Controller "Ready" → useDelivery → countdown → DeliveryManager
+ *   DeliveryManager → BallSystem (useFrame) → CricketBall + CollisionService
  */
 export function GameScreen() {
   // ── Existing hooks (unchanged) ───────────────────────────────────────────────
@@ -43,7 +44,10 @@ export function GameScreen() {
   const [isCameraActive,    setIsCameraActive]     = useState(false)
   const [trackingConfidence, setTrackingConfidence] = useState(0)
   const [latestPoseResult,  setLatestPoseResult]   = useState<PoseResult | null>(null)
-  const [debugVisible,      setDebugVisible]       = useState(false)
+  const [batDebugVisible,    setBatDebugVisible]    = useState(false)
+  const [ballDebugVisible,   setBallDebugVisible]   = useState(false)
+  const [cameraDebugVisible, setCameraDebugVisible] = useState(false)
+  const cameraSnapshotRef = useRef<CameraSnapshot | null>(null)
 
   // ── Bat tracking (Phase 3) ───────────────────────────────────────────────────
   const {
@@ -54,10 +58,15 @@ export function GameScreen() {
     startBatCalibration,
   } = useBatTracking(latestFrame, latestPoseResult, calibrationData, gameState.handedness, gameState.controllerMode)
 
-  // 'D' key toggles the bat debug overlay
+  // ── Ball delivery (Phase 4) ──────────────────────────────────────────────────
+  const delivery = useDelivery(socket, batTransformRef, swingMetricsRef)
+
+  // D = bat debug · B = ball debug · C = camera debug
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'd' || e.key === 'D') setDebugVisible(v => !v)
+      if (e.key === 'd' || e.key === 'D') setBatDebugVisible(v => !v)
+      if (e.key === 'b' || e.key === 'B') setBallDebugVisible(v => !v)
+      if (e.key === 'c' || e.key === 'C') setCameraDebugVisible(v => !v)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -76,42 +85,7 @@ export function GameScreen() {
     dispatch({ type: 'SET_CALIBRATED', calibrationData: data })
   }
 
-  // ── Onboarding step definitions ──────────────────────────────────────────────
   const controllerConnected = roomState?.controllerConnected ?? false
-  const onboardingSteps = [
-    {
-      id: 'camera',
-      icon: '📷',
-      label: 'Start Camera',
-      sublabel: 'Enable body tracking',
-      done: isCameraActive,
-      active: !isCameraActive,
-    },
-    {
-      id: 'phone',
-      icon: '📱',
-      label: 'Connect Phone',
-      sublabel: roomState ? `Room ${roomState.roomCode}` : 'Create a room first',
-      done: controllerConnected,
-      active: isCameraActive && !controllerConnected,
-    },
-    {
-      id: 'calibrate',
-      icon: '🎯',
-      label: 'Calibrate Pose',
-      sublabel: 'Stand in batting stance',
-      done: gameState.isCalibrated,
-      active: isCameraActive && controllerConnected && !gameState.isCalibrated,
-    },
-    {
-      id: 'play',
-      icon: '🏏',
-      label: 'Ready to Play',
-      sublabel: 'All systems go',
-      done: gameState.isCalibrated && controllerConnected,
-      active: gameState.isCalibrated && controllerConnected,
-    },
-  ]
 
   const phaseProgressSteps = [
     {
@@ -186,10 +160,37 @@ export function GameScreen() {
               batterPosition={batterPosition}
               calibration={calibrationData}
               batTransformRef={batTransformRef}
+              swingMetricsRef={swingMetricsRef}
               swingState={swingState}
-              orbitEnabled
+              deliveryManagerRef={delivery.deliveryManagerRef}
+              deliveryStateRef={delivery.deliveryStateRef}
+              deliveryIdRef={delivery.deliveryIdRef}
+              onDeliveryEndRef={delivery.onDeliveryEndRef}
+              ballDebugRef={delivery.ballDebugRef}
+              cameraSnapshotRef={cameraSnapshotRef}
+              orbitEnabled={false}
             />
           </div>
+
+          {/* ── Delivery countdown HUD ───────────────────────────────────────── */}
+          {delivery.deliveryControlState === 'COUNTDOWN' && (
+            <div className="absolute inset-0 flex items-center justify-center
+              pointer-events-none z-20">
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-slate-400 text-sm uppercase tracking-widest">
+                  Get ready…
+                </p>
+                <div
+                  key={delivery.countdown}
+                  className="w-24 h-24 rounded-full border-4 border-red-500
+                    flex items-center justify-center text-6xl font-black text-white
+                    animate-pulse shadow-[0_0_40px_rgba(239,68,68,0.6)]"
+                >
+                  {delivery.countdown}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Player Tracking PIP ─────────────────────────────────────────── */}
           <PlayerTrackingOverlay
@@ -203,7 +204,7 @@ export function GameScreen() {
             isBatCalibrated={isBatCalibrated}
           />
 
-          {/* ── Bat debug overlay (toggle with D key) ───────────────────────── */}
+          {/* ── Bat debug overlay (D key) ───────────────────────────────────── */}
           <BatDebugOverlay
             batTransformRef={batTransformRef}
             swingMetricsRef={swingMetricsRef}
@@ -212,8 +213,22 @@ export function GameScreen() {
             sensorFps={frameRate}
             trackingConfidence={trackingConfidence}
             onCalibrateBat={startBatCalibration}
-            visible={debugVisible}
+            visible={batDebugVisible}
           />
+
+          {/* ── Ball debug overlay (B key) ───────────────────────────────────── */}
+          {ballDebugVisible && (
+            <BallDebugOverlay
+              ballDebugRef={delivery.ballDebugRef}
+              deliveryControlState={delivery.deliveryControlState}
+              countdown={delivery.countdown}
+            />
+          )}
+
+          {/* ── Camera debug overlay (C key) ─────────────────────────────────── */}
+          {cameraDebugVisible && (
+            <CameraDebugOverlay snapshotRef={cameraSnapshotRef} />
+          )}
 
           {/* ── Scene legend ────────────────────────────────────────────────── */}
           <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20
@@ -243,8 +258,6 @@ export function GameScreen() {
         </aside>
       </div>
 
-      {/* ── Bottom onboarding bar ────────────────────────────────────────────── */}
-      <OnboardingBar steps={onboardingSteps} />
     </div>
   )
 }

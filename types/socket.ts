@@ -1,5 +1,6 @@
 import type { SensorFrame } from './sensor'
 import type { RoomState } from './room'
+import type { DeliveryStatePayload } from './ball'
 
 // ─── Payloads ────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,10 @@ export interface ClientToServerEvents {
   'room:leave': () => void
   'sensor:data': (frame: SensorFrame) => void
   ping: (clientTs: number, callback: (serverTs: number) => void) => void
+  /** Controller signals it is ready for the next ball */
+  'delivery:request': () => void
+  /** Game screen broadcasts delivery state changes to the controller */
+  'delivery:state': (payload: DeliveryStatePayload) => void
 }
 
 export interface ServerToClientEvents {
@@ -57,6 +62,10 @@ export interface ServerToClientEvents {
   'room:controller-disconnected': (payload: ControllerDisconnectedPayload) => void
   'sensor:data': (frame: SensorFrame) => void
   error: (payload: ErrorPayload) => void
+  /** Forwarded from controller to game screen */
+  'delivery:request': () => void
+  /** Forwarded from game screen to controller */
+  'delivery:state': (payload: DeliveryStatePayload) => void
 }
 
 // Inter-server events (required by Socket.IO types even if unused)

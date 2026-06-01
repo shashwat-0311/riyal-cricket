@@ -73,6 +73,8 @@ export function useRoom(): UseRoomReturn {
       setError(payload.message)
     }
 
+    if (!socket) return   // socket is null during SSR — effects don't run there but guard anyway
+
     socket.on('room:state-update', onStateUpdate)
     socket.on('sensor:data', onSensorData)
     socket.on('room:controller-disconnected', onControllerDisconnected)
